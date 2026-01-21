@@ -1,84 +1,67 @@
 pipeline {
     agent {
         kubernetes {
-            // This label ensures the pod is unique per build
-            label 'devsecops-agent'
-            yaml """
-apiVersion: v1
-kind: Pod
-metadata:
-  labels:
-    some-label: some-value
-spec:
-  containers:
-  # 1. The Builder (Maven + Java)
-  - name: maven
-    image: maven:3.9.6-eclipse-temurin-17
-    command:
-    - cat
-    tty: true
-    
-  # 2. The Image Builder (Kaniko - No Docker Daemon needed!)
-  - name: kaniko
-    image: gcr.io/kaniko-project/executor:debug
-    command:
-    - sleep
-    args:
-    - 99d
-    volumeMounts:
-    - name: harbor-secret-vol
-      mountPath: /kaniko/.docker
-  
-  # Mount the Secret we created in Step 2
-  volumes:
-  - name: harbor-secret-vol
-    secret:
-      secretName: harbor-creds
-      items:
-      - key: .dockerconfigjson
-        path: config.json
-"""
+            yamlFile 'pod.yaml' // Point to the pod definition above
         }
     }
 
     environment {
-        // Your Harbor Details
-        REGISTRY = '12.0.1.12'
-        PROJECT = 'library'
-        APP_NAME = 'secure-pipeline-demo'
-        IMAGE_TAG = "${BUILD_NUMBER}"
+        HARBOR_REGISTRY = "12.0.1.12"
+        IMAGE_NAME = "library/secure-app"
+        TAG = "${env.BUILD_NUMBER}"
     }
 
     stages {
-        stage('Checkout') {
+        stage('Checkout Source') {
             steps {
                 checkout scm
             }
         }
 
-        stage('Build & Test (Maven)') {
+        stage('Snyk Security Scan (SAST & SCA)') {
+            steps {
+                container('snyk') {
+                    withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
+                        echo "--- Checking Maven Dependencies (SCA) ---"
+                        sh "snyk test --auth-token=${SNYK_TOKEN} --severity-threshold=high"
+
+                        echo "--- Checking Java Source Code (SAST) ---"
+                        sh "snyk code test --auth-token=${SNYK_TOKEN}"
+                    }
+                }
+            }
+        }
+
+        stage('Maven Build') {
             steps {
                 container('maven') {
-                    // Run Maven inside the 'maven' container defined above
                     sh 'mvn clean package -DskipTests'
                 }
             }
         }
 
-        stage('Build & Push (Kaniko)') {
+        stage('Build & Push Image (Kaniko)') {
             steps {
                 container('kaniko') {
-                    // Kaniko magic: Builds and Pushes securely
-                    // --skip-tls-verify is NEEDED for self-signed Harbor certs
+                    // Builds the image and pushes to your Harbor VM
                     sh """
-                    /kaniko/executor \
-                        --context `pwd` \
-                        --dockerfile `pwd`/Dockerfile \
-                        --destination ${REGISTRY}/${PROJECT}/${APP_NAME}:${IMAGE_TAG} \
-                        --destination ${REGISTRY}/${PROJECT}/${APP_NAME}:latest \
-                        --skip-tls-verify \
-                        --insecure
+                    /kaniko/executor --context `pwd` \
+                    --dockerfile `pwd`/Dockerfile \
+                    --destination ${HARBOR_REGISTRY}/${IMAGE_NAME}:${TAG} \
+                    --skip-tls-verify --insecure
                     """
+                }
+            }
+        }
+
+        stage('Final Container Scan') {
+            steps {
+                container('snyk') {
+                    withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
+                        echo "--- Scanning Final Image Layers ---"
+                        // Scans the image pushed to Harbor for OS vulnerabilities
+                        sh "snyk container test ${HARBOR_REGISTRY}/${IMAGE_NAME}:${TAG} --auth-token=${SNYK_TOKEN} --skip-tls"
+                    }
                 }
             }
         }
