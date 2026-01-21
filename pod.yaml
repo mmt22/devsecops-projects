@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: maven
+    image: maven:3.8.6-openjdk-11
+    command: ['sleep']
+    args: ['99d']
+  - name: snyk
+    image: snyk/snyk:maven-3.8 # Snyk image with Maven to resolve dependencies
+    command: ['sleep']
+    args: ['99d']
+  - name: kaniko
+    image: gcr.io/kaniko-project/executor:debug
+    command: ['sleep']
+    args: ['99d']
+    volumeMounts:
+    - name: harbor-creds
+      mountPath: /kaniko/.docker
+  volumes:
+  - name: harbor-creds
+    secret:
+      secretName: harbor-credentials # Ensure this matches your K8s secret name
+      items:
+        - key: .dockerconfigjson
+          path: config.json
