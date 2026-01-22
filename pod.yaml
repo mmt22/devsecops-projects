@@ -6,7 +6,7 @@ metadata:
 spec:
   containers:
   - name: "maven"
-    # Upgraded from openjdk-11 to eclipse-temurin-17 to support Spring Boot 3.4.10
+    # Upgraded this from openjdk-11 to eclipse-temurin-17 to support Spring Boot 3.4.10
     image: "maven:3.9.6-eclipse-temurin-17"
     command:
     - "sleep"
