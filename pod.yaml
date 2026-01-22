@@ -1,9 +1,13 @@
-apiVersion: v1
-kind: Pod
+apiVersion: "v1"
+kind: "Pod"
+metadata:
+  labels:
+    jenkins/jenkins-jenkins-agent: "true"
 spec:
   containers:
-- name: "maven"
-    image: "maven:3.9.6-eclipse-temurin-17" # Upgraded from openjdk-11
+  - name: "maven"
+    # Upgraded from openjdk-11 to eclipse-temurin-17 to support Spring Boot 3.4.10
+    image: "maven:3.9.6-eclipse-temurin-17"
     command:
     - "sleep"
     args:
@@ -12,21 +16,37 @@ spec:
     - mountPath: "/home/jenkins/agent"
       name: "workspace-volume"
       readOnly: false
-  - name: snyk
-    image: snyk/snyk:maven  # Changed from maven-3.8
-    command: ['sleep']
-    args: ['99d']
-  - name: kaniko
-    image: gcr.io/kaniko-project/executor:debug
-    command: ['sleep']
-    args: ['99d']
+  - name: "snyk"
+    image: "snyk/snyk:maven"
+    command:
+    - "sleep"
+    args:
+    - "99d"
     volumeMounts:
-    - name: harbor-creds
-      mountPath: /kaniko/.docker
+    - mountPath: "/home/jenkins/agent"
+      name: "workspace-volume"
+      readOnly: false
+  - name: "kaniko"
+    image: "gcr.io/kaniko-project/executor:debug"
+    command:
+    - "sleep"
+    args:
+    - "99d"
+    volumeMounts:
+    - mountPath: "/kaniko/.docker"
+      name: "harbor-creds"
+    - mountPath: "/home/jenkins/agent"
+      name: "workspace-volume"
+      readOnly: false
+  nodeSelector:
+    kubernetes.io/os: "linux"
+  restartPolicy: "Never"
   volumes:
-  - name: harbor-creds
+  - name: "harbor-creds"
     secret:
-      secretName: harbor-creds # Ensure this matches your K8s secret name
       items:
-        - key: .dockerconfigjson
-          path: config.json
+      - key: ".dockerconfigjson"
+        path: "config.json"
+      secretName: "harbor-creds"
+  - name: "workspace-volume"
+    emptyDir: {}
