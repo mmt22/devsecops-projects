@@ -20,7 +20,7 @@ spec:
   volumes:
   - name: harbor-creds
     secret:
-      secretName: harbor-credentials # Ensure this matches your K8s secret name
+      secretName: harbor-creds # Ensure this matches your K8s secret name
       items:
         - key: .dockerconfigjson
           path: config.json
