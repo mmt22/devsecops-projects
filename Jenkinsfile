@@ -6,11 +6,8 @@ pipeline {
     }
 
     options {
-        // STOP THE LOOP: This prevents multiple builds from running at once
         disableConcurrentBuilds()
-        // CLEANUP: Keeps only the last 5 builds in your history
         buildDiscarder(logRotator(numToKeepStr: '5'))
-        // TIMEOUT: Fails the build if it gets stuck for more than 30 mins
         timeout(time: 30, unit: 'MINUTES')
     }
 
@@ -23,7 +20,6 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                // Milestone ensures if you push new code, the old build stops immediately
                 milestone(1)
                 checkout scm
             }
@@ -34,11 +30,9 @@ pipeline {
                 container('snyk') {
                     withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
                         echo "--- Scanning Dependencies (SCA) ---"
-                        // Fails the build if HIGH or CRITICAL vulnerabilities are found
                         sh "snyk test --auth-token=${SNYK_TOKEN} --severity-threshold=high"
 
                         echo "--- Scanning Source Code (SAST) ---"
-                        // Scans your Java code for logic flaws
                         sh "snyk code test --auth-token=${SNYK_TOKEN}"
                     }
                 }
@@ -68,7 +62,9 @@ pipeline {
             }
         }
 
-steps {
+        // --- FIXED SECTION BELOW ---
+        stage('Image Vulnerability Scan') { 
+            steps {
                 container('snyk') {
                     // 1. Fetch BOTH Snyk token and Harbor Credentials
                     withCredentials([
@@ -87,6 +83,8 @@ steps {
                 }
             }
         }
+        // --- END FIXED SECTION ---
+    }
     
     post {
         always {
