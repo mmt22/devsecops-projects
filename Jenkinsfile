@@ -30,10 +30,12 @@ pipeline {
                 container('snyk') {
                     withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
                         echo "--- Scanning Dependencies (SCA) ---"
-                        sh "snyk test --auth-token=${SNYK_TOKEN} --severity-threshold=high"
+                        // FIX: Use single quotes (') to prevent "Insecure Interpolation" warning
+                        sh 'snyk test --auth-token=$SNYK_TOKEN --severity-threshold=high'
 
                         echo "--- Scanning Source Code (SAST) ---"
-                        sh "snyk code test --auth-token=${SNYK_TOKEN}"
+                        // FIX: Use single quotes (') here as well
+                        sh 'snyk code test --auth-token=$SNYK_TOKEN'
                     }
                 }
             }
@@ -51,8 +53,7 @@ pipeline {
         stage('Build & Push to Harbor') {
             steps {
                 container('kaniko') {
-                    echo "--- Building Container, Pushing to Harbor, and Saving Tarball ---"
-                    // Added --tarPath to save a local copy for scanning
+                    echo "--- Building Container (Chainguard), Pushing, and Saving Tarball ---"
                     sh """
                     /kaniko/executor --context `pwd` \
                     --dockerfile `pwd`/Dockerfile \
@@ -69,11 +70,30 @@ pipeline {
                 container('snyk') {
                     withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
                         echo "--- Scanning local image artifact (Bypassing Network) ---"
-                        
-                        // FIX: Scan the local 'image.tar' file instead of pulling from Harbor
-                        // This fixes the HTTP vs HTTPS mismatch error
+                        // Using 'docker-archive:' for local scan
                         sh 'snyk container test docker-archive:image.tar --file=Dockerfile --auth-token=$SNYK_TOKEN --severity-threshold=high'
                     }
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                container('kubectl') {
+                    echo "--- Deploying to Namespace: secure-app-ns ---"
+                    
+                    // 1. Replace Placeholders in YAML with actual Registry/Tag
+                    sh """
+                    sed -i 's|HARBOR_REGISTRY_PLACEHOLDER|${HARBOR_REGISTRY}|g' k8s-deployment.yaml
+                    sed -i 's|TAG_PLACEHOLDER|${TAG}|g' k8s-deployment.yaml
+                    """
+
+                    // 2. Apply the Manifests
+                    // Note: This assumes your Jenkins ServiceAccount has permissions to create Namespaces/Deployments
+                    sh 'kubectl apply -f k8s-deployment.yaml'
+                    
+                    echo "--- Application Deployed Successfully ---"
+                    echo "Access URL: http://<YOUR_NODE_IP>/secure-app"
                 }
             }
         }
