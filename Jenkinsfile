@@ -77,7 +77,7 @@ pipeline {
                             
                             // 3. SECURE SYNTAX: Use single quotes to prevent secret leakage in logs
                             // Added '-d' for debug output if it fails again
-                            sh 'snyk container test $HARBOR_REGISTRY/$IMAGE_NAME:$TAG --auth-token=$SNYK_TOKEN --skip-tls -d'
+                            sh 'snyk container test $HARBOR_REGISTRY:80/$IMAGE_NAME:$TAG --auth-token=$SNYK_TOKEN --skip-tls -d'
                         }
                     }
                 }
