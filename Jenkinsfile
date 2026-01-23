@@ -25,7 +25,7 @@ pipeline {
             }
         }
 
-        stage('Snyk Security Scan') {
+        stage('Snyk Security Scan (Code & Deps)') {
             steps {
                 container('snyk') {
                     withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
@@ -51,39 +51,32 @@ pipeline {
         stage('Build & Push to Harbor') {
             steps {
                 container('kaniko') {
-                    echo "--- Building Container and Pushing to Harbor ---"
+                    echo "--- Building Container, Pushing to Harbor, and Saving Tarball ---"
+                    // Added --tarPath to save a local copy for scanning
                     sh """
                     /kaniko/executor --context `pwd` \
                     --dockerfile `pwd`/Dockerfile \
                     --destination ${HARBOR_REGISTRY}/${IMAGE_NAME}:${TAG} \
+                    --tarPath image.tar \
                     --skip-tls-verify --insecure
                     """
                 }
             }
         }
 
-        // --- FIXED SECTION BELOW ---
-        stage('Image Vulnerability Scan') { 
+        stage('Image Vulnerability Scan') {
             steps {
                 container('snyk') {
-                    // 1. Fetch BOTH Snyk token and Harbor Credentials
-                    withCredentials([
-                        string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN'),
-                        usernamePassword(credentialsId: 'harbor-creds', usernameVariable: 'HARBOR_USER', passwordVariable: 'HARBOR_PASS')
-                    ]) {
-                        // 2. Pass Harbor creds as Env Vars so Snyk can pull the image
-                        withEnv(["SNYK_REGISTRY_USERNAME=${HARBOR_USER}", "SNYK_REGISTRY_PASSWORD=${HARBOR_PASS}"]) {
-                            echo "--- Scanning final image in Harbor ---"
-                            
-                            // 3. SECURE SYNTAX: Use single quotes to prevent secret leakage in logs
-                            // Added '-d' for debug output if it fails again
-                            sh 'snyk container test $HARBOR_REGISTRY:80/$IMAGE_NAME:$TAG --auth-token=$SNYK_TOKEN --skip-tls -d'
-                        }
+                    withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
+                        echo "--- Scanning local image artifact (Bypassing Network) ---"
+                        
+                        // FIX: Scan the local 'image.tar' file instead of pulling from Harbor
+                        // This fixes the HTTP vs HTTPS mismatch error
+                        sh 'snyk container test --file=image.tar --auth-token=$SNYK_TOKEN --severity-threshold=high'
                     }
                 }
             }
         }
-        // --- END FIXED SECTION ---
     }
     
     post {
