@@ -73,7 +73,7 @@ steps {
                     // 1. Fetch BOTH Snyk token and Harbor Credentials
                     withCredentials([
                         string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN'),
-                        usernamePassword(credentialsId: 'harbor-creds-secret', usernameVariable: 'HARBOR_USER', passwordVariable: 'HARBOR_PASS')
+                        usernamePassword(credentialsId: 'harbor-creds', usernameVariable: 'HARBOR_USER', passwordVariable: 'HARBOR_PASS')
                     ]) {
                         // 2. Pass Harbor creds as Env Vars so Snyk can pull the image
                         withEnv(["SNYK_REGISTRY_USERNAME=${HARBOR_USER}", "SNYK_REGISTRY_PASSWORD=${HARBOR_PASS}"]) {
