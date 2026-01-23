@@ -72,7 +72,7 @@ pipeline {
                         
                         // FIX: Scan the local 'image.tar' file instead of pulling from Harbor
                         // This fixes the HTTP vs HTTPS mismatch error
-                        sh 'snyk container test --file=image.tar --auth-token=$SNYK_TOKEN --severity-threshold=high'
+                        sh 'snyk container test docker-archive:image.tar --file=Dockerfile --auth-token=$SNYK_TOKEN --severity-threshold=high'
                     }
                 }
             }
