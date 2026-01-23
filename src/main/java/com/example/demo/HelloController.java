@@ -8,6 +8,6 @@ public class HelloController {
 
     @GetMapping("/")
     public String index() {
-        return "DevSecOps Pipeline is Active! System is secure.";
+        return "DevSecOps Pipeline is Active! System is secure , Ci/Cd.";
     }
 }
