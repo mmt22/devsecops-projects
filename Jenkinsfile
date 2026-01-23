@@ -68,17 +68,25 @@ pipeline {
             }
         }
 
-        stage('Image Vulnerability Scan') {
-            steps {
+steps {
                 container('snyk') {
-                    withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
-                        echo "--- Scanning final image in Harbor ---"
-                        sh "snyk container test ${HARBOR_REGISTRY}/${IMAGE_NAME}:${TAG} --auth-token=${SNYK_TOKEN} --skip-tls"
+                    // 1. Fetch BOTH Snyk token and Harbor Credentials
+                    withCredentials([
+                        string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN'),
+                        usernamePassword(credentialsId: 'harbor-creds-secret', usernameVariable: 'HARBOR_USER', passwordVariable: 'HARBOR_PASS')
+                    ]) {
+                        // 2. Pass Harbor creds as Env Vars so Snyk can pull the image
+                        withEnv(["SNYK_REGISTRY_USERNAME=${HARBOR_USER}", "SNYK_REGISTRY_PASSWORD=${HARBOR_PASS}"]) {
+                            echo "--- Scanning final image in Harbor ---"
+                            
+                            // 3. SECURE SYNTAX: Use single quotes to prevent secret leakage in logs
+                            // Added '-d' for debug output if it fails again
+                            sh 'snyk container test $HARBOR_REGISTRY/$IMAGE_NAME:$TAG --auth-token=$SNYK_TOKEN --skip-tls -d'
+                        }
                     }
                 }
             }
         }
-    }
     
     post {
         always {
