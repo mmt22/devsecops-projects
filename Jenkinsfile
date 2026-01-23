@@ -77,21 +77,23 @@ pipeline {
 
         stage('Deploy to Kubernetes') {
             steps {
-                container('kubectl') {
-                    echo "--- Deploying to Namespace: secure-app-ns ---"
-                    
-                    // 1. Inject the actual image tag into the deployment file
+                script {
+                    echo "--- Preparing Manifests (Running on Agent) ---"
+                    // 1. Prepare the file using the Agent's shell (it has sed)
                     sh "sed -i 's|IMAGE_PLACEHOLDER|${HARBOR_REGISTRY}/${IMAGE_NAME}:${TAG}|g' k8s-deployment.yaml"
+                }
 
-                    // 2. Apply the manifests
+                container('kubectl') {
+                    echo "--- Deploying to Cluster (Running in Sidecar) ---"
+                    // 2. Apply the file using the secure kubectl sidecar
+                    // We only run 'kubectl' here, avoiding missing tool errors
                     sh 'kubectl apply -f k8s-deployment.yaml'
                     
                     echo "--- Application Deployed Successfully ---"
                 }
             }
         }
-    }
-    
+        
     post {
         always {
             echo "Pipeline finished."

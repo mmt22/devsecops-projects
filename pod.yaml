@@ -39,9 +39,12 @@ spec:
 
   # 4. Kubectl Container (Fixed Location)
   - name: kubectl
-    # Bitnami image has 'sh', 'sed', and 'kubectl' pre-installed
     image: bitnami/kubectl:latest
-    # FORCE the container to stay alive forever
+    # ALIGN PERMISSIONS: Run as UID 1000 to match the Jenkins Agent.
+    # This fixes the "process never started" error securely.
+    securityContext:
+      runAsUser: 1000
+    # Keep the container alive so Jenkins can connect
     command:
     - /bin/sh
     - -c
