@@ -7,7 +7,7 @@ COPY src ./src
 RUN mvn clean package -DskipTests
 
 # Stage 2: Run
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:17.0.13_11-jre-alpine-3.23
 RUN addgroup -S spring && adduser -S spring -G spring
 WORKDIR /app
 COPY --from=builder /app/target/*.jar app.jar
