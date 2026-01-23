@@ -1,15 +1,13 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: java
-
+  name: secure-app-ns
 ---
-# 1. The Application Deployment
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: secure-app
-  namespace: java
+  namespace: secure-app-ns
 spec:
   replicas: 1
   selector:
@@ -22,22 +20,15 @@ spec:
     spec:
       containers:
       - name: app
-        # WE WILL REPLACE THIS IMAGE TAG DYNAMICALLY IN JENKINS
-        image: HARBOR_REGISTRY_PLACEHOLDER/library/secure-app:TAG_PLACEHOLDER
+        image: IMAGE_PLACEHOLDER
         ports:
         - containerPort: 8080
-        resources:
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
-
 ---
-# 2. The Internal Service
 apiVersion: v1
 kind: Service
 metadata:
   name: secure-app-svc
-  namespace: java
+  namespace: secure-app-ns
 spec:
   selector:
     app: secure-app
@@ -45,18 +36,14 @@ spec:
     - protocol: TCP
       port: 80
       targetPort: 8080
-
 ---
-# 3. The Public Ingress (URL)
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: secure-app-ingress
-  namespace: java
+  namespace: secure-app-ns
   annotations:
-    # Use 'nginx' if using Nginx Ingress, or your specific class
     kubernetes.io/ingress.class: nginx
-    nginx.ingress.kubernetes.io/rewrite-target: /
 spec:
   rules:
   - http:

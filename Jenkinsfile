@@ -1,57 +1,103 @@
-apiVersion: v1
-kind: Pod
-metadata:
-  labels:
-    role: jenkins-agent
-spec:
-  containers:
-  # 1. Maven Container
-  - name: maven
-    image: maven:3.9.6-eclipse-temurin-17
-    command: ['sleep', '99d']
-    tty: true
-    volumeMounts:
-    - mountPath: /home/jenkins/agent
-      name: workspace-volume
-      readOnly: false
+pipeline {
+    agent {
+        kubernetes {
+            yamlFile 'pod.yaml'
+        }
+    }
 
-  # 2. Snyk Container
-  - name: snyk
-    image: snyk/snyk:maven
-    command: ['sleep', '99d']
-    tty: true
-    volumeMounts:
-    - mountPath: /home/jenkins/agent
-      name: workspace-volume
-      readOnly: false
+    options {
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '5'))
+        timeout(time: 30, unit: 'MINUTES')
+    }
 
-  # 3. Kaniko Container
-  - name: kaniko
-    image: gcr.io/kaniko-project/executor:debug
-    command: ['sleep', '99d']
-    tty: true
-    volumeMounts:
-    - mountPath: /kaniko/.docker
-      name: harbor-creds
-    - mountPath: /home/jenkins/agent
-      name: workspace-volume
-      readOnly: false
+    environment {
+        HARBOR_REGISTRY = "12.0.1.12"
+        IMAGE_NAME = "library/secure-app"
+        TAG = "${env.BUILD_NUMBER}"
+    }
 
-  # 4. Kubectl Container (MOVED HERE - CORRECT LOCATION)
-  - name: kubectl
-    image: bitnami/kubectl:latest
-    command: ['cat']
-    tty: true
-    volumeMounts:
-    - mountPath: /home/jenkins/agent
-      name: workspace-volume
+    stages {
+        stage('Checkout') {
+            steps {
+                milestone(1)
+                checkout scm
+            }
+        }
 
-  volumes:
-  - name: harbor-creds
-    secret:
-      secretName: harbor-creds
-      items:
-        - key: .dockerconfigjson
-          path: config.json
-  - name: workspace-volume
-    emptyDir: {}
+        stage('Snyk Security Scan (Code & Deps)') {
+            steps {
+                container('snyk') {
+                    withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
+                        echo "--- Scanning Dependencies (SCA) ---"
+                        // FIX: Use single quotes to prevent 'Insecure Interpolation' warning
+                        sh 'snyk test --auth-token=$SNYK_TOKEN --severity-threshold=high'
+
+                        echo "--- Scanning Source Code (SAST) ---"
+                        sh 'snyk code test --auth-token=$SNYK_TOKEN'
+                    }
+                }
+            }
+        }
+
+        stage('Build Artifact') {
+            steps {
+                container('maven') {
+                    echo "--- Compiling Java Code ---"
+                    sh 'mvn clean package -DskipTests'
+                }
+            }
+        }
+
+        stage('Build & Push to Harbor') {
+            steps {
+                container('kaniko') {
+                    echo "--- Building Container (Chainguard), Pushing, and Saving Tarball ---"
+                    sh """
+                    /kaniko/executor --context `pwd` \
+                    --dockerfile `pwd`/Dockerfile \
+                    --destination ${HARBOR_REGISTRY}/${IMAGE_NAME}:${TAG} \
+                    --tarPath image.tar \
+                    --skip-tls-verify --insecure
+                    """
+                }
+            }
+        }
+
+        stage('Image Vulnerability Scan') {
+            steps {
+                container('snyk') {
+                    withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
+                        echo "--- Scanning local image artifact (Bypassing Network) ---"
+                        sh 'snyk container test docker-archive:image.tar --file=Dockerfile --auth-token=$SNYK_TOKEN --severity-threshold=high'
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                container('kubectl') {
+                    echo "--- Deploying to Namespace: secure-app-ns ---"
+                    
+                    // 1. Inject the actual image tag into the deployment file
+                    sh "sed -i 's|IMAGE_PLACEHOLDER|${HARBOR_REGISTRY}/${IMAGE_NAME}:${TAG}|g' k8s-deployment.yaml"
+
+                    // 2. Apply the manifests
+                    sh 'kubectl apply -f k8s-deployment.yaml'
+                    
+                    echo "--- Application Deployed Successfully ---"
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            echo "Pipeline finished."
+        }
+        failure {
+            echo "Security or Build failure detected. Please check the logs."
+        }
+    }
+}

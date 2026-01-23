@@ -1,56 +1,57 @@
-apiVersion: "v1"
-kind: "Pod"
+apiVersion: v1
+kind: Pod
 metadata:
   labels:
-    jenkins/jenkins-jenkins-agent: "true"
+    role: jenkins-agent
 spec:
   containers:
-  - name: "maven"
-    # Upgraded this from openjdk-11 to eclipse-temurin-17 to support Spring Boot 3.4.10
-    image: "maven:3.9.6-eclipse-temurin-17"
-    command:
-    - "sleep"
-    args:
-    - "99d"
+  # 1. Maven Container
+  - name: maven
+    image: maven:3.9.6-eclipse-temurin-17
+    command: ['sleep', '99d']
+    tty: true
     volumeMounts:
-    - mountPath: "/home/jenkins/agent"
-      name: "workspace-volume"
+    - mountPath: /home/jenkins/agent
+      name: workspace-volume
       readOnly: false
-  - name: "snyk"
-    image: "snyk/snyk:maven"
-    command:
-    - "sleep"
-    args:
-    - "99d"
+
+  # 2. Snyk Container
+  - name: snyk
+    image: snyk/snyk:maven
+    command: ['sleep', '99d']
+    tty: true
     volumeMounts:
-    - mountPath: "/home/jenkins/agent"
-      name: "workspace-volume"
+    - mountPath: /home/jenkins/agent
+      name: workspace-volume
       readOnly: false
-  - name: "kaniko"
-    image: "gcr.io/kaniko-project/executor:debug"
-    command:
-    - "sleep"
-    args:
-    - "99d"
+
+  # 3. Kaniko Container
+  - name: kaniko
+    image: gcr.io/kaniko-project/executor:debug
+    command: ['sleep', '99d']
+    tty: true
     volumeMounts:
-    - mountPath: "/kaniko/.docker"
-      name: "harbor-creds"
-    - mountPath: "/home/jenkins/agent"
-      name: "workspace-volume"
+    - mountPath: /kaniko/.docker
+      name: harbor-creds
+    - mountPath: /home/jenkins/agent
+      name: workspace-volume
       readOnly: false
-  nodeSelector:
-    kubernetes.io/os: "linux"
-  restartPolicy: "Never"
-  volumes:
-  - name: "harbor-creds"
-    secret:
-      items:
-      - key: ".dockerconfigjson"
-        path: "config.json"
-      secretName: "harbor-creds"
-  - name: "workspace-volume"
-    emptyDir: {}
+
+  # 4. Kubectl Container (Fixed Location)
   - name: kubectl
     image: bitnami/kubectl:latest
     command: ['cat']
     tty: true
+    volumeMounts:
+    - mountPath: /home/jenkins/agent
+      name: workspace-volume
+
+  volumes:
+  - name: harbor-creds
+    secret:
+      secretName: harbor-creds
+      items:
+        - key: .dockerconfigjson
+          path: config.json
+  - name: workspace-volume
+    emptyDir: {}
