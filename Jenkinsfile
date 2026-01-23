@@ -75,7 +75,7 @@ pipeline {
             }
         }
 
-        stage('Deploy to Kubernetes') {
+stage('Deploy to Kubernetes') {
             steps {
                 script {
                     echo "--- Preparing Manifests (Running on Agent) ---"
@@ -93,7 +93,6 @@ pipeline {
                 }
             }
         }
-        
     post {
         always {
             echo "Pipeline finished."
