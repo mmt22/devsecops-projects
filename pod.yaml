@@ -39,8 +39,13 @@ spec:
 
   # 4. Kubectl Container (Fixed Location)
   - name: kubectl
+    # Bitnami image has 'sh', 'sed', and 'kubectl' pre-installed
     image: bitnami/kubectl:latest
-    command: ['cat']
+    # FORCE the container to stay alive forever
+    command:
+    - /bin/sh
+    - -c
+    - sleep infinity
     tty: true
     volumeMounts:
     - mountPath: /home/jenkins/agent
