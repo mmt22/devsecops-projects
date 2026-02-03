@@ -12,7 +12,7 @@ pipeline {
     }
 
     environment {
-        HARBOR_REGISTRY = "35.208.20.118:80"
+        HARBOR_REGISTRY = "35.208.44.32:80"
         IMAGE_NAME = "library/secure-app"
         TAG = "${env.BUILD_NUMBER}"
     }
