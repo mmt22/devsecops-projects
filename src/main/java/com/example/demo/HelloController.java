@@ -8,6 +8,6 @@ public class HelloController {
 
     @GetMapping("/")
     public String index() {
-        return "DevSecOps Pipeline with wiz cli integration is Active! System is securce 🤟";
+        return "DevSecOps Pipeline with wiz cli integration is Active!! System is securce 🤟";
     }
 }
